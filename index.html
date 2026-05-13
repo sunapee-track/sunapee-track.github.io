@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Alumni+Sans:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
+<title>Sunapee Varsity Track & Field Record History</title>
+
+<style>
+    body {
+        font-family: 'Alumni Sans', Arial, sans-serif;
+        font-size: 24px;
+        margin: 20px;
+        background: #2d5a27;
+        color: #222;
+    }
+
+    h1 {
+        margin: 0;
+        color: white;
+        font-family: 'Bebas Neue', Arial, sans-serif;
+        font-size: 3rem;
+        letter-spacing: 3px;
+    }
+
+    .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+    }
+
+    .date-nav {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .date-nav button {
+        font-family: inherit;
+        font-size: 1.2rem;
+        font-weight: bold;
+        padding: 4px 14px;
+        cursor: pointer;
+        border: 1px solid rgba(255,255,255,0.5);
+        border-radius: 4px;
+        background: rgba(255,255,255,0.15);
+        color: white;
+    }
+
+    .date-nav button:hover {
+        background: rgba(255,255,255,0.3);
+    }
+
+    .date-nav button:disabled {
+        opacity: 0.3;
+        cursor: default;
+    }
+
+    #dateDisplay {
+        font-size: 1.1rem;
+        font-weight: bold;
+        color: white;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    th {
+        background: #222;
+        color: white;
+        padding: 10px;
+        text-align: center;
+        position: sticky;
+        top: 0;
+    }
+
+    td {
+        padding: 8px 10px;
+        border-bottom: 1px solid #ddd;
+        text-align: center;
+    }
+
+    tr:hover td {
+        filter: brightness(0.95);
+    }
+
+    .girls-th {
+        background: #2d6e3e;
+    }
+
+    .boys-th {
+        background: #2a55a8;
+    }
+
+    .girls-cell {
+        background: #e8f5ec;
+    }
+
+    .boys-cell {
+        background: #e8effe;
+    }
+
+    .event-cell {
+        text-align: center;
+        font-weight: bold;
+        background: white;
+    }
+
+    .summary {
+        margin: 10px 0 20px 0;
+        font-size: 14px;
+        color: #555;
+    }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Sunapee Varsity Track & Field Records</h1>
+    <div class="date-nav">
+        <button id="prevDate">&lt;</button>
+        <span id="dateDisplay"></span>
+        <button id="nextDate">&gt;</button>
+    </div>
+</div>
+
+<div class="summary" id="summary"></div>
+
+<table id="recordsTable">
+    <thead>
+        <tr>
+            <th class="girls-th">Date</th>
+            <th class="girls-th">Athlete</th>
+            <th class="girls-th">Performance</th>
+            <th>Event</th>
+            <th class="boys-th">Performance</th>
+            <th class="boys-th">Athlete</th>
+            <th class="boys-th">Date</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<script>
+// ======================================================
+// LOAD YOUR CSV FILE
+// ======================================================
+
+const csvFile = "track_record_history.csv";
+
+// ======================================================
+// PARSE CSV
+// ======================================================
+
+async function loadCSV() {
+    const response = await fetch(csvFile);
+    const text = await response.text();
+
+    const lines = text.trim().split("\n");
+
+    const headers = lines[0].split(",");
+
+    const records = lines.slice(1).map(line => {
+        const values = parseCSVLine(line);
+
+        return {
+            date: values[0],
+            athlete: values[1],
+            performance: values[2],
+            event: values[3],
+            gender: values[4]
+        };
+    });
+
+    return records;
+}
+
+// Handles commas inside quoted CSV values
+function parseCSVLine(line) {
+    const result = [];
+    let current = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+
+        if (char === '"') {
+            inQuotes = !inQuotes;
+        }
+        else if (char === "," && !inQuotes) {
+            result.push(current);
+            current = "";
+        }
+        else {
+            current += char;
+        }
+    }
+
+    result.push(current);
+
+    return result.map(v => v.replace(/^"|"$/g, ""));
+}
+
+// ======================================================
+// DATE HELPERS
+// ======================================================
+
+function parseUSDate(dateStr) {
+    const [month, day, year] = dateStr.split("/");
+    return new Date(year, month - 1, day);
+}
+
+function toISODate(date) {
+    return date.toISOString().split("T")[0];
+}
+
+// ======================================================
+// BUILD RECORD SNAPSHOT
+// ======================================================
+
+function getRecordsAsOf(records, targetDate) {
+
+    // Only include records up to selected date
+    const filtered = records.filter(r =>
+        parseUSDate(r.date) <= targetDate
+    );
+
+    // Sort chronologically
+    filtered.sort((a, b) =>
+        parseUSDate(a.date) - parseUSDate(b.date)
+    );
+
+    // Keep latest record per event + gender
+    const latestRecords = {};
+
+    filtered.forEach(record => {
+        const key = `${record.gender}-${record.event}`;
+        latestRecords[key] = record;
+    });
+
+    return Object.values(latestRecords)
+        .sort((a, b) => {
+            if (a.gender !== b.gender) {
+                return a.gender.localeCompare(b.gender);
+            }
+            return a.event.localeCompare(b.event);
+        });
+}
+
+// ======================================================
+// RENDER TABLE
+// ======================================================
+
+function formatAthlete(name) {
+    if (name.includes("/")) {
+        return name.split("/").map(part => {
+            const [first, ...rest] = part.trim().split(" ");
+            return rest.length ? `${first[0]}.${rest.join(" ")}` : first;
+        }).join(" / ");
+    } else {
+        return name;
+    }
+}
+
+function renderTable(records, targetDate) {
+
+    const EVENT_ORDER = [
+        "100m High Hurdles",
+        "110m High Hurdles",
+        "300m Low Hurdles",
+        "100m",
+        "200m",
+        "400m",
+        "800m",
+        "1600m",
+        "3200m",
+        "Shot Put",
+        "Discus Throw",
+        "Javelin Throw",
+        "High Jump",
+        "Long Jump",
+        "Triple Jump",
+        "4x100 Relay",
+        "4x400 Relay",
+        "4x800 Relay",
+        "Most points in a Meet",
+    ];
+
+    // Group records by event
+    const byEvent = {};
+    records.forEach(record => {
+        if (!byEvent[record.event]) byEvent[record.event] = {};
+        if (record.gender === "Girls") byEvent[record.event].girls = record;
+        else byEvent[record.event].boys = record;
+    });
+
+    // Collect all events present, sorted by EVENT_ORDER
+    const events = Object.keys(byEvent).sort((a, b) => {
+        const ai = EVENT_ORDER.indexOf(a);
+        const bi = EVENT_ORDER.indexOf(b);
+        const aOrder = ai === -1 ? EVENT_ORDER.length : ai;
+        const bOrder = bi === -1 ? EVENT_ORDER.length : bi;
+        return aOrder - bOrder;
+    });
+
+    const tbody = document.querySelector("#recordsTable tbody");
+    tbody.innerHTML = "";
+
+    events.forEach(event => {
+        const g = byEvent[event].girls;
+        const b = byEvent[event].boys;
+
+        const row = document.createElement("tr");
+        row.innerHTML = `
+            <td class="girls-cell">${g ? g.date : ""}</td>
+            <td class="girls-cell">${g ? formatAthlete(g.athlete) : ""}</td>
+            <td class="girls-cell">${g ? g.performance : ""}</td>
+            <td class="event-cell">${event}</td>
+            <td class="boys-cell">${b ? b.performance : ""}</td>
+            <td class="boys-cell">${b ? formatAthlete(b.athlete) : ""}</td>
+            <td class="boys-cell">${b ? b.date : ""}</td>
+        `;
+        tbody.appendChild(row);
+    });
+
+    //document.getElementById("summary").textContent =
+    //    `Displaying ${events.length} events (${records.length} records) as of ${targetDate.toLocaleDateString()}`;
+}
+
+// ======================================================
+// MAIN
+// ======================================================
+
+async function main() {
+
+    const allRecords = await loadCSV();
+
+    // Collect sorted unique dates from the record history
+    const uniqueDates = [...new Set(allRecords.map(r => r.date))]
+        .map(d => parseUSDate(d))
+        .sort((a, b) => a - b);
+
+    let currentIndex = uniqueDates.length - 1;
+
+    const prevBtn = document.getElementById("prevDate");
+    const nextBtn = document.getElementById("nextDate");
+    const dateDisplay = document.getElementById("dateDisplay");
+
+    function updateView() {
+        const selectedDate = uniqueDates[currentIndex];
+        dateDisplay.textContent = selectedDate.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+        prevBtn.disabled = currentIndex === 0;
+        nextBtn.disabled = currentIndex === uniqueDates.length - 1;
+        renderTable(getRecordsAsOf(allRecords, selectedDate), selectedDate);
+    }
+
+    prevBtn.addEventListener("click", () => { currentIndex--; updateView(); });
+    nextBtn.addEventListener("click", () => { currentIndex++; updateView(); });
+
+    updateView();
+}
+
+main();
+
+</script>
+
+</body>
+</html>
