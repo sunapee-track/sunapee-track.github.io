@@ -153,6 +153,12 @@
 
 const csvFile = "track_record_history.csv";
 
+function normalizeHurdles(event) {
+    if (event === "100m High Hurdles") return "100m/110m High Hurdles";
+    if (event === "110m High Hurdles") return "100m/110m High Hurdles";
+    return event;
+}
+
 // ======================================================
 // PARSE CSV
 // ======================================================
@@ -172,7 +178,7 @@ async function loadCSV() {
             date: values[0],
             athlete: values[1],
             performance: values[2],
-            event: values[3],
+            event: normalizeHurdles(values[3]),
             gender: values[4]
         };
     });
@@ -270,8 +276,7 @@ function formatAthlete(name) {
 function renderTable(records, targetDate) {
 
     const EVENT_ORDER = [
-        "100m High Hurdles",
-        "110m High Hurdles",
+        "100m/110m High Hurdles",
         "300m Low Hurdles",
         "100m",
         "200m",
